@@ -12,7 +12,7 @@
     compressible::turbulenceModel& turb = turbulence[i];
     volScalarField& K = KFluid[i];
     volScalarField& dpdt = dpdtFluid[i];
-    volScalarField& dQ = dQFluid[i];
+    volScalarField& Qdot = QdotFluid[i];
 
     volScalarField& p = thermo.p();
     const volScalarField& psi = thermo.psi();
@@ -50,4 +50,7 @@
     }
 
     const label inertIndex(composition.species()[inertSpecie]);   
+
+    bool& resReachedFluid = residualReachedFluid[i];
+    bool& residualControlUsed = residualControlUsedFluid[i];
 
