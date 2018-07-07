@@ -3,7 +3,7 @@
   \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
    \\    /   O peration     |
     \\  /    A nd           | Copyright (C) 2011-2016 OpenFOAM Foundation
-     \\/     M anipulation  |
+     \\/     M anipulation  | Copyright (C) 2017 OpenCFD Ltd.
 -------------------------------------------------------------------------------
 License
     This file is part of OpenFOAM.
@@ -22,17 +22,21 @@ License
     along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
 
 Application
-    chtMultiRegionSimpleReactingFoam
+    chtMultiRegionSimpleFoam
+
+Group
+    grpHeatTransferSolvers
 
 Description
     Steady-state solver for buoyant, turbulent fluid flow and solid heat
-    conduction with conjugate heat transfer between solid and fluid regions,
-    plus combustion with chemical reactions.
+    conduction with conjugate heat transfer between solid and fluid regions.
 
 \*---------------------------------------------------------------------------*/
 
 #include "fvCFD.H"
-#include "rhoCombustionModel.H"
+#include "rhoThermo.H"
+#include "rhoReactionThermo.H"
+#include "CombustionModel.H"
 #include "turbulentFluidThermoModel.H"
 #include "fixedGradientFvPatchFields.H"
 #include "regionProperties.H"
@@ -40,6 +44,7 @@ Description
 #include "radiationModel.H"
 #include "fvOptions.H"
 #include "coordinateSystem.H"
+#include "loopControl.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -54,7 +59,6 @@ int main(int argc, char *argv[])
     #include "createMeshes.H"
     #include "createFields.H"
     #include "initContinuityErrs.H"
-
 
     while (runTime.loop())
     {
@@ -78,11 +82,38 @@ int main(int argc, char *argv[])
             #include "solveSolid.H"
         }
 
+        // Additional loops for energy solution only
+        {
+            loopControl looping(runTime, "SIMPLE", "energyCoupling");
+
+            while (looping.loop())
+            {
+                Info<< nl << looping << nl;
+
+                forAll(fluidRegions, i)
+                {
+                    Info<< "\nSolving for fluid region "
+                        << fluidRegions[i].name() << endl;
+                   #include "setRegionFluidFields.H"
+                   #include "readFluidMultiRegionSIMPLEControls.H"
+                   frozenFlow = true;
+                   #include "solveFluid.H"
+                }
+
+                forAll(solidRegions, i)
+                {
+                    Info<< "\nSolving for solid region "
+                        << solidRegions[i].name() << endl;
+                    #include "setRegionSolidFields.H"
+                    #include "readSolidMultiRegionSIMPLEControls.H"
+                    #include "solveSolid.H"
+                }
+            }
+        }
+
         runTime.write();
 
-        Info<< "ExecutionTime = " << runTime.elapsedCpuTime() << " s"
-            << "  ClockTime = " << runTime.elapsedClockTime() << " s"
-            << nl << endl;
+        runTime.printExecutionTime(Info);
     }
 
     Info<< "End\n" << endl;

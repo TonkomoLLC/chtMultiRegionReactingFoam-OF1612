@@ -3,7 +3,7 @@
   \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
    \\    /   O peration     |
     \\  /    A nd           | Copyright (C) 2011-2016 OpenFOAM Foundation
-     \\/     M anipulation  |
+     \\/     M anipulation  | Copyright (C) 2017 OpenCFD Ltd.
 -------------------------------------------------------------------------------
 License
     This file is part of OpenFOAM.
@@ -22,12 +22,14 @@ License
     along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
 
 Application
-    chtMultiRegionReactingFoam
+    chtMultiRegionFoam
+
+Group
+    grpHeatTransferSolvers
 
 Description
     Transient solver for buoyant, turbulent fluid flow and solid heat
-    conduction with conjugate heat transfer between solid and fluid regions,
-    plus combustion with chemical reactions.
+    conduction with conjugate heat transfer between solid and fluid regions.
 
     It handles secondary fluid or solid circuits which can be coupled
     thermally with the main fluid region. i.e radiators, etc.
@@ -35,8 +37,9 @@ Description
 \*---------------------------------------------------------------------------*/
 
 #include "fvCFD.H"
-#include "rhoCombustionModel.H"
 #include "turbulentFluidThermoModel.H"
+#include "rhoReactionThermo.H"
+#include "CombustionModel.H"
 #include "fixedGradientFvPatchFields.H"
 #include "regionProperties.H"
 #include "compressibleCourantNo.H"
@@ -45,6 +48,7 @@ Description
 #include "radiationModel.H"
 #include "fvOptions.H"
 #include "coordinateSystem.H"
+#include "loopControl.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -87,11 +91,10 @@ int main(int argc, char *argv[])
             }
         }
 
-
         // --- PIMPLE loop
-        for (int oCorr=0; oCorr<nOuterCorr; oCorr++)
+        for (int oCorr=0; oCorr<nOuterCorr; ++oCorr)
         {
-            bool finalIter = oCorr == nOuterCorr-1;
+            const bool finalIter = (oCorr == nOuterCorr-1);
 
             forAll(fluidRegions, i)
             {
@@ -111,13 +114,40 @@ int main(int argc, char *argv[])
                 #include "solveSolid.H"
             }
 
+            // Additional loops for energy solution only
+            if (!oCorr && nOuterCorr > 1)
+            {
+                loopControl looping(runTime, pimple, "energyCoupling");
+
+                while (looping.loop())
+                {
+                    Info<< nl << looping << nl;
+
+                    forAll(fluidRegions, i)
+                    {
+                        Info<< "\nSolving for fluid region "
+                            << fluidRegions[i].name() << endl;
+                       #include "setRegionFluidFields.H"
+                       #include "readFluidMultiRegionPIMPLEControls.H"
+                       frozenFlow = true;
+                       #include "solveFluid.H"
+                    }
+
+                    forAll(solidRegions, i)
+                    {
+                        Info<< "\nSolving for solid region "
+                            << solidRegions[i].name() << endl;
+                        #include "setRegionSolidFields.H"
+                        #include "readSolidMultiRegionPIMPLEControls.H"
+                        #include "solveSolid.H"
+                    }
+                }
+            }
         }
 
         runTime.write();
 
-        Info<< "ExecutionTime = " << runTime.elapsedCpuTime() << " s"
-            << "  ClockTime = " << runTime.elapsedClockTime() << " s"
-            << nl << endl;
+        runTime.printExecutionTime(Info);
     }
 
     Info<< "End\n" << endl;

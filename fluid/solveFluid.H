@@ -24,7 +24,7 @@ else
         #include "pEqn.H"
     }
 
-    turb.correct();
+    turbulence.correct();
 
     rho = thermo.rho();
 }

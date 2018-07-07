@@ -27,9 +27,7 @@
     volVectorField& U = UFluid[i];
     surfaceScalarField& phi = phiFluid[i];
 
-    compressible::turbulenceModel& turbulence = turbulenceFluid[i];
-    volScalarField& K = KFluid[i];
-    volScalarField& dpdt = dpdtFluid[i];
+    compressible::turbulenceModel& turb = turbulenceFluid[i];
 
     volScalarField& p = thermo.p();
     const volScalarField& psi = thermo.psi();
